@@ -149,15 +149,54 @@ function frequencyLabel(frequency) {
   return "Cada semana";
 }
 
-async function loadDaySchedule(dateKey) {
+async function loadDayScheduleRecord(dateKey) {
   const { data, error } = await db
     .from("day_schedules")
-    .select("hours")
+    .select("hours, closed")
     .eq("date", dateKey)
     .maybeSingle();
 
   if (error) throw error;
-  return data?.hours?.length ? [...data.hours].sort() : defaultTimesRange();
+  return data;
+}
+
+async function isDayClosed(dateKey) {
+  const record = await loadDayScheduleRecord(dateKey);
+  return Boolean(record?.closed);
+}
+
+async function loadDaySchedule(dateKey) {
+  const record = await loadDayScheduleRecord(dateKey);
+  if (record?.closed) return [];
+  return record?.hours?.length ? [...record.hours].sort() : defaultTimesRange();
+}
+
+function summarizeDaySlots(slots) {
+  if (!slots.length) {
+    return { closed: true, full: false, freeCount: 0, totalCount: 0 };
+  }
+
+  const freeCount = slots.filter((slot) => slot.status === "free").length;
+  return {
+    closed: false,
+    full: freeCount === 0,
+    freeCount,
+    totalCount: slots.length
+  };
+}
+
+async function loadUserAppointmentsInWindow(userId, startKey, endKey) {
+  const { data, error } = await db
+    .from("appointments")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("date", startKey)
+    .lte("date", endKey)
+    .order("date", { ascending: true })
+    .order("time", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 
 async function loadBlockedForDate(dateKey) {
@@ -197,6 +236,9 @@ async function loadVipData() {
 }
 
 async function buildDaySlots(dateKey, vipSchedules, vipExceptions) {
+  const closed = await isDayClosed(dateKey);
+  if (closed) return [];
+
   const [workingHours, appointments, blockedSlots, vipOccurrences] = await Promise.all([
     loadDaySchedule(dateKey),
     loadAppointmentsForDate(dateKey),

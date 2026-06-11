@@ -568,6 +568,91 @@ select:focus {
   border-color: rgba(56, 182, 163, 0.5);
 }
 
+.day.day-available {
+  border-color: rgba(56, 182, 163, 0.28);
+}
+
+.day.day-partial {
+  border-color: rgba(213, 155, 83, 0.45);
+}
+
+.day.day-partial .dot {
+  background: var(--brand);
+}
+
+.day.day-full {
+  border-color: rgba(198, 77, 61, 0.45);
+  background: rgba(198, 77, 61, 0.08);
+}
+
+.day.day-full .dot {
+  background: var(--danger);
+}
+
+.day.day-closed {
+  border-color: rgba(169, 161, 152, 0.35);
+  opacity: 0.72;
+}
+
+.day.day-closed .dot {
+  background: var(--muted);
+}
+
+.upcoming-banner {
+  border-color: rgba(56, 182, 163, 0.35);
+  background: rgba(56, 182, 163, 0.08);
+}
+
+.upcoming-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.upcoming-list li {
+  margin-bottom: 6px;
+}
+
+.quota-warning {
+  margin: 10px 0 0;
+  color: #f0a89a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.btn.quota-blocked {
+  opacity: 0.72;
+}
+
+.day-off-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(198, 77, 61, 0.35);
+  border-radius: 8px;
+  background: rgba(198, 77, 61, 0.08);
+  cursor: pointer;
+}
+
+.day-off-toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.push-notice {
+  margin-top: 14px;
+}
+
+.push-status {
+  margin-top: 8px;
+}
+
+.slot.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .slot.vip-slot {
   border-color: rgba(56, 182, 163, 0.4);
 }

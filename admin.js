@@ -18,6 +18,8 @@ const scheduleModalDate = document.getElementById("scheduleModalDate");
 const scheduleHoursGrid = document.getElementById("scheduleHoursGrid");
 const closeScheduleModal = document.getElementById("closeScheduleModal");
 const saveScheduleBtn = document.getElementById("saveScheduleBtn");
+const dayOffToggle = document.getElementById("dayOffToggle");
+const scheduleEditorNote = document.getElementById("scheduleEditorNote");
 const vipModal = document.getElementById("vipModal");
 const vipModalTitle = document.getElementById("vipModalTitle");
 const vipForm = document.getElementById("vipForm");
@@ -39,6 +41,7 @@ let activeDateKey = "";
 let cachedVipSchedules = [];
 let cachedVipExceptions = [];
 let scheduleDraft = new Set();
+let scheduleDayClosed = false;
 
 function requireBarber() {
   const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
@@ -238,9 +241,14 @@ async function renderCalendar() {
   monthTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
   calendarGrid.innerHTML = `<div class="empty">Cargando calendario...</div>`;
 
-  let appointments = [];
+  let slotsByDate = {};
   try {
-    appointments = await loadAppointmentsBetween(toDateKey(start), toDateKey(end));
+    for (let index = 0; index < 42; index += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      const dateKey = toDateKey(date);
+      slotsByDate[dateKey] = await buildDaySlots(dateKey, cachedVipSchedules, cachedVipExceptions);
+    }
   } catch (error) {
     calendarGrid.innerHTML = `<div class="empty">No se pudo cargar el calendario.</div>`;
     console.error(error);
@@ -253,25 +261,44 @@ async function renderCalendar() {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     const dateKey = toDateKey(date);
-    const dayAppointments = appointments.filter((appointment) => appointment.date === dateKey);
-    const vipToday = getVipOccurrencesForDate(cachedVipSchedules, cachedVipExceptions, dateKey)
-      .filter((item) => !item.isRescheduledAway).length;
-    const totalBusy = dayAppointments.length + vipToday;
+    const daySlotsData = slotsByDate[dateKey] || [];
+    const summary = summarizeDaySlots(daySlotsData);
     const isCurrentMonth = date.getMonth() === month;
     const isToday = dateKey === toDateKey(new Date());
 
+    let statusLabel = "Libre";
+    let dayClass = "day-available";
+
+    if (summary.closed) {
+      statusLabel = "Cerrado";
+      dayClass = "day-closed";
+    } else if (summary.full) {
+      statusLabel = "Lleno";
+      dayClass = "day-full";
+    } else if (summary.freeCount < summary.totalCount) {
+      statusLabel = `${summary.freeCount} libres`;
+      dayClass = "day-partial";
+    }
+
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `day${isCurrentMonth ? "" : " outside"}${isToday ? " today" : ""}`;
+    button.className = `day${isCurrentMonth ? "" : " outside"}${isToday ? " today" : ""} ${dayClass}`;
     button.innerHTML = `
       <span class="day-number">${date.getDate()}</span>
       <span class="day-meta">
-        <span>${totalBusy ? `${totalBusy} ocupadas` : "Libre"}</span>
-        ${totalBusy ? '<span class="dot"></span>' : ""}
+        <span>${statusLabel}</span>
+        ${summary.closed || summary.full || summary.freeCount < summary.totalCount ? '<span class="dot"></span>' : ""}
       </span>
     `;
     button.addEventListener("click", () => openDay(dateKey));
     calendarGrid.appendChild(button);
+  }
+
+  let appointments = [];
+  try {
+    appointments = await loadAppointmentsBetween(toDateKey(start), toDateKey(end));
+  } catch (error) {
+    console.error(error);
   }
 
   await updateMetrics(appointments.filter((appointment) => makeLocalDate(appointment.date).getMonth() === month));
@@ -280,6 +307,7 @@ async function renderCalendar() {
 async function openDay(dateKey) {
   activeDateKey = dateKey;
   let slots = [];
+  const closed = await isDayClosed(dateKey);
 
   try {
     slots = await buildDaySlots(dateKey, cachedVipSchedules, cachedVipExceptions);
@@ -289,10 +317,20 @@ async function openDay(dateKey) {
     return;
   }
 
-  const busyCount = slots.filter((slot) => slot.status !== "free").length;
+  const summary = summarizeDaySlots(slots);
   modalDate.textContent = prettyDate(dateKey);
-  modalSubtitle.textContent = `${busyCount} hora${busyCount === 1 ? "" : "s"} ocupada${busyCount === 1 ? "" : "s"} de ${slots.length} en el horario del dia`;
+  modalSubtitle.textContent = closed
+    ? "Este dia esta marcado como dia de descanso. No hay horarios disponibles."
+    : summary.full
+      ? `Dia completo: las ${summary.totalCount} horas estan ocupadas o bloqueadas.`
+      : `${summary.totalCount - summary.freeCount} hora${summary.totalCount - summary.freeCount === 1 ? "" : "s"} ocupada${summary.totalCount - summary.freeCount === 1 ? "" : "s"} de ${summary.totalCount} en el horario del dia`;
   dayAppointments.innerHTML = "";
+
+  if (closed) {
+    dayAppointments.innerHTML = `<div class="empty">Dia de descanso. Puedes habilitarlo desde "Editar horario".</div>`;
+    modal.classList.remove("hidden");
+    return;
+  }
 
   slots.forEach((slot) => {
     const row = document.createElement("div");
@@ -377,17 +415,25 @@ async function deleteAppointment(id, dateKey) {
 
 async function openScheduleEditor(dateKey) {
   activeDateKey = dateKey;
-  const hours = await loadDaySchedule(dateKey);
-  scheduleDraft = new Set(hours);
+  const record = await loadDayScheduleRecord(dateKey);
+  scheduleDayClosed = Boolean(record?.closed);
+  scheduleDraft = new Set(scheduleDayClosed ? [] : (record?.hours?.length ? record.hours : defaultTimesRange()));
   scheduleModalDate.textContent = prettyDate(dateKey);
   scheduleHoursGrid.innerHTML = "";
+
+  if (dayOffToggle) {
+    dayOffToggle.checked = scheduleDayClosed;
+  }
+  updateScheduleEditorState();
 
   defaultTimesRange().forEach((time) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `slot${scheduleDraft.has(time) ? " selected" : ""}`;
+    button.dataset.time = time;
+    button.className = `slot schedule-hour${scheduleDraft.has(time) ? " selected" : ""}`;
     button.textContent = timeLabel(time);
     button.addEventListener("click", () => {
+      if (scheduleDayClosed) return;
       if (scheduleDraft.has(time)) scheduleDraft.delete(time);
       else scheduleDraft.add(time);
       button.classList.toggle("selected", scheduleDraft.has(time));
@@ -398,18 +444,54 @@ async function openScheduleEditor(dateKey) {
   scheduleModal.classList.remove("hidden");
 }
 
+function updateScheduleEditorState() {
+  const hourButtons = scheduleHoursGrid.querySelectorAll(".schedule-hour");
+  hourButtons.forEach((button) => {
+    button.disabled = scheduleDayClosed;
+    button.classList.toggle("disabled", scheduleDayClosed);
+  });
+
+  if (scheduleEditorNote) {
+    scheduleEditorNote.textContent = scheduleDayClosed
+      ? "Este dia quedara cerrado para clientes. Puedes volver a habilitarlo cuando quieras."
+      : "Marca las horas en las que trabajaras este dia.";
+  }
+}
+
 async function saveDaySchedule() {
   if (!activeDateKey) return;
 
+  if (scheduleDayClosed) {
+    const { error } = await db.from("day_schedules").upsert({
+      date: activeDateKey,
+      hours: [],
+      closed: true,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "date" });
+
+    if (error) {
+      showToast("No se pudo marcar el dia como cerrado.");
+      console.error(error);
+      return;
+    }
+
+    scheduleModal.classList.add("hidden");
+    await renderCalendar();
+    await openDay(activeDateKey);
+    showToast("Dia marcado como descanso.");
+    return;
+  }
+
   const hours = [...scheduleDraft].sort();
   if (hours.length === 0) {
-    showToast("Selecciona al menos una hora de trabajo.");
+    showToast("Selecciona al menos una hora de trabajo o marca el dia como descanso.");
     return;
   }
 
   const { error } = await db.from("day_schedules").upsert({
     date: activeDateKey,
     hours,
+    closed: false,
     updated_at: new Date().toISOString()
   }, { onConflict: "date" });
 
@@ -433,6 +515,7 @@ async function initAdmin() {
   await renderCalendar();
   await renderRegistrationRequests();
   await renderVipList();
+  await initPushForBarber();
 
   prevMonth.addEventListener("click", async () => {
     visibleMonth.setMonth(visibleMonth.getMonth() - 1);
@@ -458,6 +541,17 @@ async function initAdmin() {
     if (event.target === scheduleModal) scheduleModal.classList.add("hidden");
   });
   saveScheduleBtn.addEventListener("click", saveDaySchedule);
+
+  dayOffToggle?.addEventListener("change", () => {
+    scheduleDayClosed = dayOffToggle.checked;
+    if (scheduleDayClosed) scheduleDraft.clear();
+    else if (scheduleDraft.size === 0) defaultTimesRange().forEach((time) => scheduleDraft.add(time));
+    updateScheduleEditorState();
+    scheduleHoursGrid.querySelectorAll(".schedule-hour").forEach((button) => {
+      const time = button.dataset.time;
+      if (time) button.classList.toggle("selected", scheduleDraft.has(time));
+    });
+  });
 
   openVipForm.addEventListener("click", () => openVipEditor());
   closeVipModal.addEventListener("click", () => vipModal.classList.add("hidden"));

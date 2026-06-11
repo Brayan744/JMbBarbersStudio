@@ -63,6 +63,7 @@ create table if not exists day_schedules (
   id uuid primary key default gen_random_uuid(),
   date date not null unique,
   hours text[] not null,
+  closed boolean not null default false,
   updated_at timestamptz not null default now()
 );
 
@@ -119,3 +120,19 @@ create policy "public day schedules access" on day_schedules for all to anon, au
 create policy "public vip schedules access" on vip_schedules for all to anon, authenticated using (true) with check (true);
 create policy "public vip exceptions access" on vip_exceptions for all to anon, authenticated using (true) with check (true);
 create policy "public notification log access" on notification_log for all to anon, authenticated using (true) with check (true);
+
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references client_users(id) on delete cascade,
+  phone text not null,
+  role text not null default 'client' check (role in ('client', 'barber')),
+  player_id text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_phone_idx on push_subscriptions(phone);
+
+alter table push_subscriptions enable row level security;
+grant select, insert, update, delete on push_subscriptions to anon, authenticated;
+create policy "public push subscriptions access" on push_subscriptions for all to anon, authenticated using (true) with check (true);

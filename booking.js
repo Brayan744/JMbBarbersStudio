@@ -17,6 +17,9 @@ const pendingBanner = document.getElementById("pendingBanner");
 const vipBanner = document.getElementById("vipBanner");
 const vipBannerText = document.getElementById("vipBannerText");
 const bookingQuotaPill = document.getElementById("bookingQuotaPill");
+const quotaWarning = document.getElementById("quotaWarning");
+const upcomingBanner = document.getElementById("upcomingBanner");
+const upcomingList = document.getElementById("upcomingList");
 const rescheduleModal = document.getElementById("rescheduleModal");
 const rescheduleTitle = document.getElementById("rescheduleTitle");
 const rescheduleSubtitle = document.getElementById("rescheduleSubtitle");
@@ -53,7 +56,13 @@ function updateSummary() {
   selectedDateSummary.textContent = selectedDateKey ? prettyDate(selectedDateKey) : "Sin seleccionar";
   selectedTimeSummary.textContent = selectedTime ? timeLabel(selectedTime) : "Sin seleccionar";
   const quotaReached = bookingsInWindow >= STUDIO.MAX_BOOKINGS_PER_WINDOW;
-  confirmBooking.disabled = !(selectedDateKey && selectedTime) || quotaReached;
+  confirmBooking.disabled = !(selectedDateKey && selectedTime);
+  quotaWarning?.classList.toggle("hidden", !quotaReached);
+  if (quotaReached) {
+    confirmBooking.classList.add("quota-blocked");
+  } else {
+    confirmBooking.classList.remove("quota-blocked");
+  }
 }
 
 function hydrateUser(user) {
@@ -134,6 +143,49 @@ function renderVipBanner() {
   vipBanner.classList.remove("hidden");
 }
 
+async function renderUpcomingBanner() {
+  if (!upcomingBanner || !upcomingList || !currentClient) return;
+
+  const appointments = await loadUserAppointmentsInWindow(
+    currentClient.id,
+    getClientWindowStart(),
+    getClientWindowEnd()
+  );
+
+  const vipItems = [];
+  for (let offset = 0; offset < STUDIO.CLIENT_WINDOW_DAYS; offset += 1) {
+    const dateKey = addDays(getClientWindowStart(), offset);
+    const occurrences = getVipOccurrencesForDate(getMyVipSchedules(), cachedVipExceptions, dateKey)
+      .filter((item) => !item.isRescheduledAway);
+    occurrences.forEach((item) => {
+      vipItems.push({ dateKey, time: item.time, kind: "VIP" });
+    });
+  }
+
+  const items = [
+    ...appointments.map((item) => ({
+      dateKey: item.date,
+      time: item.time,
+      kind: "Cita"
+    })),
+    ...vipItems
+  ].sort((left, right) => {
+    if (left.dateKey === right.dateKey) return left.time.localeCompare(right.time);
+    return left.dateKey.localeCompare(right.dateKey);
+  });
+
+  if (items.length === 0) {
+    upcomingBanner.classList.add("hidden");
+    upcomingList.innerHTML = "";
+    return;
+  }
+
+  upcomingList.innerHTML = items
+    .map((item) => `<li><strong>${prettyDateShort(item.dateKey)}</strong> - ${timeLabel(item.time)} <span class="pill">${item.kind}</span></li>`)
+    .join("");
+  upcomingBanner.classList.remove("hidden");
+}
+
 async function renderCalendar() {
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth();
@@ -171,19 +223,41 @@ async function renderCalendar() {
     const isCurrentMonth = date.getMonth() === month;
     const isToday = dateKey === toDateKey(new Date());
     const bookable = isBookableDate(dateKey);
+    const daySlotsData = slotsByDate[dateKey] || [];
+    const summary = summarizeDaySlots(daySlotsData);
     const myVipToday = getVipOccurrencesForDate(getMyVipSchedules(), cachedVipExceptions, dateKey)
       .filter((item) => !item.isRescheduledAway);
-    const daySlotsData = slotsByDate[dateKey] || [];
-    const freeCount = daySlotsData.filter((slot) => slot.status === "free").length;
+
+    let statusLabel = "Fuera de rango";
+    let dayClass = "";
+
+    if (bookable) {
+      if (summary.closed) {
+        statusLabel = "Cerrado";
+        dayClass = "day-closed";
+      } else if (myVipToday.length) {
+        statusLabel = "VIP";
+        dayClass = "vip-day";
+      } else if (summary.full) {
+        statusLabel = "Lleno";
+        dayClass = "day-full";
+      } else if (summary.freeCount < summary.totalCount) {
+        statusLabel = `${summary.freeCount} libres`;
+        dayClass = "day-partial";
+      } else {
+        statusLabel = `${summary.freeCount} libres`;
+        dayClass = "day-available";
+      }
+    }
 
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `day${isCurrentMonth ? "" : " outside"}${isToday ? " today" : ""}${bookable ? "" : " past"}${myVipToday.length ? " vip-day" : ""}`;
+    button.className = `day${isCurrentMonth ? "" : " outside"}${isToday ? " today" : ""}${bookable ? "" : " past"} ${dayClass}`.trim();
     button.innerHTML = `
       <span class="day-number">${date.getDate()}</span>
       <span class="day-meta">
-        <span>${!bookable ? "Fuera de rango" : myVipToday.length ? "VIP" : freeCount ? `${freeCount} libres` : "Lleno"}</span>
-        ${(myVipToday.length || (bookable && freeCount < daySlotsData.length && daySlotsData.length)) ? '<span class="dot"></span>' : ""}
+        <span>${statusLabel}</span>
+        ${bookable && (summary.closed || summary.full || summary.freeCount < summary.totalCount || myVipToday.length) ? '<span class="dot"></span>' : ""}
       </span>
     `;
 
@@ -201,10 +275,10 @@ async function openDay(dateKey) {
   let slots = [];
   const myVipToday = getVipOccurrencesForDate(getMyVipSchedules(), cachedVipExceptions, dateKey)
     .filter((item) => !item.isRescheduledAway);
+  const closed = await isDayClosed(dateKey);
 
   daySlots.innerHTML = `<div class="empty">Cargando horarios...</div>`;
   modalDate.textContent = prettyDate(dateKey);
-  modalSubtitle.textContent = "Selecciona una hora libre para tu cita.";
   modal.classList.remove("hidden");
 
   if (vipDayInfo) {
@@ -231,12 +305,16 @@ async function openDay(dateKey) {
     return;
   }
 
-  const availableTimes = slots.filter((slot) => slot.status === "free");
-
-  if (availableTimes.length === 0) {
-    daySlots.innerHTML = `<div class="empty">No hay horarios disponibles este dia. Elige otra fecha.</div>`;
+  const summary = summarizeDaySlots(slots);
+  if (closed) {
+    modalSubtitle.textContent = "El barbero no trabaja este dia.";
+    daySlots.innerHTML = `<div class="empty">Este dia esta cerrado. Elige otra fecha.</div>`;
     return;
   }
+
+  modalSubtitle.textContent = summary.full
+    ? "Este dia esta completo. Todas las horas estan ocupadas."
+    : "Selecciona una hora libre para tu cita.";
 
   daySlots.innerHTML = "";
 
@@ -248,6 +326,10 @@ async function openDay(dateKey) {
 
     if (slot.status === "free") {
       button.addEventListener("click", () => {
+        if (bookingsInWindow >= STUDIO.MAX_BOOKINGS_PER_WINDOW) {
+          showToast(`Has alcanzado el maximo de ${STUDIO.MAX_BOOKINGS_PER_WINDOW} citas en los proximos 7 dias.`);
+          return;
+        }
         selectedDateKey = dateKey;
         selectedTime = slot.time;
         updateSummary();
@@ -263,6 +345,10 @@ async function openDay(dateKey) {
     if (slot.status === "vip" && slot.vip.vip.user_id === currentClient.id) {
       button.title = "Tu horario VIP";
       button.classList.add("vip-slot");
+    } else if (slot.status === "booked") {
+      button.title = "Horario ocupado";
+    } else if (slot.status === "blocked") {
+      button.title = "Horario no disponible";
     } else {
       button.title = "Horario ocupado";
     }
@@ -326,6 +412,7 @@ async function saveVipReschedule(newDateKey, newTime) {
 
   await refreshBookingData();
   await renderCalendar();
+  await renderUpcomingBanner();
   rescheduleModal.classList.add("hidden");
   showToast("Cita VIP reagendada solo para ese dia.");
   return true;
@@ -349,6 +436,7 @@ async function skipVipDay() {
 
   await refreshBookingData();
   await renderCalendar();
+  await renderUpcomingBanner();
   rescheduleModal.classList.add("hidden");
   showToast("Ese dia VIP quedo liberado.");
 }
@@ -367,7 +455,7 @@ async function submitBooking() {
   }
 
   if (bookingsInWindow >= STUDIO.MAX_BOOKINGS_PER_WINDOW) {
-    showToast("Ya tienes 2 citas en los proximos 7 dias. Cancela una o espera a que pasen.");
+    showToast(`Has alcanzado el maximo de ${STUDIO.MAX_BOOKINGS_PER_WINDOW} citas en los proximos 7 dias. Cancela una o espera a que pasen.`);
     return;
   }
 
@@ -402,6 +490,7 @@ async function submitBooking() {
   selectedTime = "";
   await refreshBookingData();
   await renderCalendar();
+  await renderUpcomingBanner();
   updateSummary();
   showToast("Cita confirmada. Te esperamos en JMbarber.");
 }
@@ -413,7 +502,9 @@ async function initBooking() {
   hydrateUser(currentClient);
   await refreshBookingData();
   renderVipBanner();
+  await renderUpcomingBanner();
   await processDueReminders(currentClient);
+  await initPushForCurrentUser(currentClient, "client");
   await renderCalendar();
   updateSummary();
 
@@ -451,7 +542,13 @@ async function initBooking() {
     }
   });
 
-  confirmBooking.addEventListener("click", submitBooking);
+  confirmBooking.addEventListener("click", () => {
+    if (bookingsInWindow >= STUDIO.MAX_BOOKINGS_PER_WINDOW) {
+      showToast(`Has alcanzado el maximo de ${STUDIO.MAX_BOOKINGS_PER_WINDOW} citas en los proximos 7 dias.`);
+      return;
+    }
+    submitBooking();
+  });
 }
 
 if (calendarGrid) {

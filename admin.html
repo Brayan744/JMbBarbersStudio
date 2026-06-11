@@ -86,6 +86,18 @@
         </div>
         <div id="registrationRequests" class="request-list"></div>
       </section>
+
+      <section class="section card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Alertas</p>
+            <h2>Notificaciones en celular</h2>
+          </div>
+        </div>
+        <p class="muted small">Recibe aviso cuando un cliente reserve y recordatorios de citas. En iPhone, agrega el panel a la pantalla de inicio.</p>
+        <button class="btn full" type="button" id="enablePushBtn">Activar notificaciones</button>
+        <p id="pushStatus" class="muted small push-status"></p>
+      </section>
     </div>
   </main>
 
@@ -119,6 +131,11 @@
         <button id="closeScheduleModal" class="close" type="button" aria-label="Cerrar">&times;</button>
       </div>
       <div class="modal-body">
+        <label class="day-off-toggle">
+          <input type="checkbox" id="dayOffToggle">
+          <span>No trabajare este dia (dia de descanso)</span>
+        </label>
+        <p id="scheduleEditorNote" class="muted small">Marca las horas en las que trabajaras este dia.</p>
         <div id="scheduleHoursGrid" class="slots modal-slots"></div>
         <button class="btn full" type="button" id="saveScheduleBtn">Guardar horario del dia</button>
       </div>
@@ -167,9 +184,11 @@
   </section>
 
   <div id="toast" class="toast hidden" role="status"></div>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="studio-utils.js"></script>
+  <script src="push.js"></script>
   <script src="notify.js"></script>
   <script src="admin.js"></script>
 </body>

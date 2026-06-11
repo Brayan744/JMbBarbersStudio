@@ -32,6 +32,11 @@
     <p id="vipBannerText">Tienes horarios fijos reservados. Puedes reagendar un dia puntual si no puedes asistir.</p>
   </div>
 
+  <div id="upcomingBanner" class="alert-banner upcoming-banner hidden" role="status">
+    <strong>Tus proximas citas</strong>
+    <ul id="upcomingList" class="upcoming-list"></ul>
+  </div>
+
   <div id="reminderBanner" class="alert-banner reminder-banner hidden" role="status">
     <strong>Recordatorio</strong>
     <p></p>
@@ -121,9 +126,16 @@
           <li><span class="muted">Hora</span><strong id="selectedTimeSummary">Sin seleccionar</strong></li>
         </ul>
         <button class="btn full" type="button" id="confirmBooking" disabled>Confirmar cita</button>
+        <p id="quotaWarning" class="quota-warning hidden">Has alcanzado el maximo de 2 citas en los proximos 7 dias.</p>
         <div class="notice">
           <strong>Limite semanal</strong>
           <p class="muted small">Puedes tener hasta 2 citas activas en los proximos 7 dias.</p>
+        </div>
+        <div class="notice push-notice">
+          <strong>Notificaciones en tu celular</strong>
+          <p class="muted small">Activa alertas gratis para recordatorios 24 h antes y confirmacion al reservar. En iPhone, agrega JMbarber a la pantalla de inicio.</p>
+          <button class="btn secondary full" type="button" id="enablePushBtn">Activar notificaciones</button>
+          <p id="pushStatus" class="muted small push-status"></p>
         </div>
       </aside>
     </section>
@@ -172,9 +184,11 @@
   </section>
 
   <div id="toast" class="toast hidden" role="status"></div>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="studio-utils.js"></script>
+  <script src="push.js"></script>
   <script src="notify.js"></script>
   <script src="booking.js"></script>
 </body>
