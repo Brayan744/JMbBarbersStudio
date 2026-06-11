@@ -1,30 +1,44 @@
-const WORK_START = 7;
-const WORK_END = 21;
-
 const calendarGrid = document.getElementById("calendarGrid");
 const monthTitle = document.getElementById("monthTitle");
 const todayCount = document.getElementById("todayCount");
 const monthCount = document.getElementById("monthCount");
 const pendingCount = document.getElementById("pendingCount");
 const pendingPill = document.getElementById("pendingPill");
+const vipCount = document.getElementById("vipCount");
 const registrationRequests = document.getElementById("registrationRequests");
+const vipList = document.getElementById("vipList");
 const modal = document.getElementById("dayModal");
 const modalDate = document.getElementById("modalDate");
 const modalSubtitle = document.getElementById("modalSubtitle");
 const dayAppointments = document.getElementById("dayAppointments");
 const closeModal = document.getElementById("closeModal");
+const editScheduleBtn = document.getElementById("editScheduleBtn");
+const scheduleModal = document.getElementById("scheduleModal");
+const scheduleModalDate = document.getElementById("scheduleModalDate");
+const scheduleHoursGrid = document.getElementById("scheduleHoursGrid");
+const closeScheduleModal = document.getElementById("closeScheduleModal");
+const saveScheduleBtn = document.getElementById("saveScheduleBtn");
+const vipModal = document.getElementById("vipModal");
+const vipModalTitle = document.getElementById("vipModalTitle");
+const vipForm = document.getElementById("vipForm");
+const vipEditId = document.getElementById("vipEditId");
+const vipClient = document.getElementById("vipClient");
+const vipDay = document.getElementById("vipDay");
+const vipTime = document.getElementById("vipTime");
+const vipFrequency = document.getElementById("vipFrequency");
+const openVipForm = document.getElementById("openVipForm");
+const closeVipModal = document.getElementById("closeVipModal");
 const prevMonth = document.getElementById("prevMonth");
 const nextMonth = document.getElementById("nextMonth");
 const logoutBtn = document.getElementById("logoutBtn");
 const toast = document.getElementById("toast");
 
-const monthNames = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-];
-
 let visibleMonth = new Date();
 visibleMonth.setDate(1);
+let activeDateKey = "";
+let cachedVipSchedules = [];
+let cachedVipExceptions = [];
+let scheduleDraft = new Set();
 
 function requireBarber() {
   const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
@@ -33,42 +47,6 @@ function requireBarber() {
     return false;
   }
   return true;
-}
-
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function makeLocalDate(dateKey) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function prettyDate(dateKey) {
-  return makeLocalDate(dateKey).toLocaleDateString("es-CO", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  });
-}
-
-function timeLabel(time) {
-  const [hour] = time.split(":").map(Number);
-  const suffix = hour >= 12 ? "p.m." : "a.m.";
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:00 ${suffix}`;
-}
-
-function timesRange() {
-  const times = [];
-  for (let hour = WORK_START; hour < WORK_END; hour += 1) {
-    times.push(`${String(hour).padStart(2, "0")}:00`);
-  }
-  return times;
 }
 
 function showToast(message) {
@@ -91,17 +69,6 @@ async function loadAppointmentsBetween(startKey, endKey) {
   return data;
 }
 
-async function loadAppointmentsForDate(dateKey) {
-  const { data, error } = await db
-    .from("appointments")
-    .select("*")
-    .eq("date", dateKey)
-    .order("time", { ascending: true });
-
-  if (error) throw error;
-  return data;
-}
-
 async function loadUsers() {
   const { data, error } = await db
     .from("client_users")
@@ -109,6 +76,13 @@ async function loadUsers() {
     .order("created_at", { ascending: true });
 
   if (error) throw error;
+  return data;
+}
+
+async function refreshVipCache() {
+  const data = await loadVipData();
+  cachedVipSchedules = data.vipSchedules;
+  cachedVipExceptions = data.vipExceptions;
   return data;
 }
 
@@ -121,6 +95,7 @@ async function updateMetrics(monthAppointments) {
   monthCount.textContent = monthAppointments.length;
   pendingCount.textContent = pendingUsers.length;
   pendingPill.textContent = `${pendingUsers.length} pendiente${pendingUsers.length === 1 ? "" : "s"}`;
+  vipCount.textContent = cachedVipSchedules.length;
 }
 
 async function renderRegistrationRequests() {
@@ -179,7 +154,76 @@ async function updateUserStatus(userId, status) {
 
   await renderCalendar();
   await renderRegistrationRequests();
-  showToast(status === "approved" ? "Cliente aprobado. Ya puede agendar." : "Registro rechazado.");
+  showToast(status === "approved" ? "Cliente aprobado." : "Registro rechazado.");
+}
+
+function populateVipTimeSelect() {
+  vipTime.innerHTML = defaultTimesRange()
+    .map((time) => `<option value="${time}">${timeLabel(time)}</option>`)
+    .join("");
+}
+
+async function populateVipClientSelect(selectedId = "") {
+  const users = (await loadUsers()).filter((user) => user.status !== "rejected");
+  vipClient.innerHTML = users
+    .map((user) => `<option value="${user.id}" data-name="${user.name}" data-phone="${user.phone}">${user.name} (${user.phone})</option>`)
+    .join("");
+
+  if (selectedId) vipClient.value = selectedId;
+}
+
+async function renderVipList() {
+  vipList.innerHTML = "";
+
+  if (cachedVipSchedules.length === 0) {
+    vipList.innerHTML = `<div class="empty">No hay clientes VIP configurados.</div>`;
+    return;
+  }
+
+  cachedVipSchedules.forEach((vip) => {
+    const item = document.createElement("div");
+    item.className = "request-item";
+    item.innerHTML = `
+      <div>
+        <strong>${vip.name} <span class="pill vip-pill">VIP</span></strong>
+        <div class="muted small">${vip.phone} - ${WEEKDAY_NAMES[vip.day_of_week]} ${timeLabel(vip.time)} - ${frequencyLabel(vip.frequency)}</div>
+      </div>
+      <div class="request-actions">
+        <button class="btn secondary" type="button" data-action="edit">Editar</button>
+        <button class="btn danger" type="button" data-action="delete">Eliminar</button>
+      </div>
+    `;
+
+    item.querySelector('[data-action="edit"]').addEventListener("click", () => openVipEditor(vip));
+    item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteVip(vip.id));
+    vipList.appendChild(item);
+  });
+}
+
+function openVipEditor(vip = null) {
+  populateVipClientSelect(vip?.user_id || "");
+  vipEditId.value = vip?.id || "";
+  vipModalTitle.textContent = vip ? "Editar VIP" : "Agregar VIP";
+  vipDay.value = String(vip?.day_of_week ?? 6);
+  vipTime.value = vip?.time || "16:00";
+  vipFrequency.value = vip?.frequency || "weekly";
+  vipClient.disabled = Boolean(vip);
+  vipModal.classList.remove("hidden");
+}
+
+async function deleteVip(vipId) {
+  const { error } = await db.from("vip_schedules").update({ active: false }).eq("id", vipId);
+  if (error) {
+    showToast("No se pudo eliminar el VIP.");
+    console.error(error);
+    return;
+  }
+
+  await refreshVipCache();
+  await renderVipList();
+  await renderCalendar();
+  if (activeDateKey) await openDay(activeDateKey);
+  showToast("Cliente VIP eliminado.");
 }
 
 async function renderCalendar() {
@@ -191,7 +235,7 @@ async function renderCalendar() {
   const end = new Date(start);
   end.setDate(start.getDate() + 41);
 
-  monthTitle.textContent = `${monthNames[month]} ${year}`;
+  monthTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
   calendarGrid.innerHTML = `<div class="empty">Cargando calendario...</div>`;
 
   let appointments = [];
@@ -210,6 +254,9 @@ async function renderCalendar() {
     date.setDate(start.getDate() + index);
     const dateKey = toDateKey(date);
     const dayAppointments = appointments.filter((appointment) => appointment.date === dateKey);
+    const vipToday = getVipOccurrencesForDate(cachedVipSchedules, cachedVipExceptions, dateKey)
+      .filter((item) => !item.isRescheduledAway).length;
+    const totalBusy = dayAppointments.length + vipToday;
     const isCurrentMonth = date.getMonth() === month;
     const isToday = dateKey === toDateKey(new Date());
 
@@ -219,8 +266,8 @@ async function renderCalendar() {
     button.innerHTML = `
       <span class="day-number">${date.getDate()}</span>
       <span class="day-meta">
-        <span>${dayAppointments.length ? `${dayAppointments.length} citas` : "Libre"}</span>
-        ${dayAppointments.length ? '<span class="dot"></span>' : ""}
+        <span>${totalBusy ? `${totalBusy} ocupadas` : "Libre"}</span>
+        ${totalBusy ? '<span class="dot"></span>' : ""}
       </span>
     `;
     button.addEventListener("click", () => openDay(dateKey));
@@ -231,43 +278,59 @@ async function renderCalendar() {
 }
 
 async function openDay(dateKey) {
-  let appointments = [];
+  activeDateKey = dateKey;
+  let slots = [];
 
   try {
-    appointments = await loadAppointmentsForDate(dateKey);
+    slots = await buildDaySlots(dateKey, cachedVipSchedules, cachedVipExceptions);
   } catch (error) {
     showToast("No se pudieron cargar las citas del dia.");
     console.error(error);
     return;
   }
 
-  const busyByTime = new Map(appointments.map((appointment) => [appointment.time, appointment]));
-
+  const busyCount = slots.filter((slot) => slot.status !== "free").length;
   modalDate.textContent = prettyDate(dateKey);
-  modalSubtitle.textContent = `${appointments.length} cita${appointments.length === 1 ? "" : "s"} agendada${appointments.length === 1 ? "" : "s"} - Horario de 7:00 a.m. a 9:00 p.m.`;
+  modalSubtitle.textContent = `${busyCount} hora${busyCount === 1 ? "" : "s"} ocupada${busyCount === 1 ? "" : "s"} de ${slots.length} en el horario del dia`;
   dayAppointments.innerHTML = "";
 
-  timesRange().forEach((time) => {
-    const appointment = busyByTime.get(time);
+  slots.forEach((slot) => {
     const row = document.createElement("div");
-    row.className = `time-row${appointment ? " busy" : ""}`;
+    row.className = `time-row${slot.status !== "free" ? " busy" : ""}`;
 
-    if (appointment) {
+    if (slot.status === "booked") {
       row.innerHTML = `
-        <strong>${timeLabel(time)}</strong>
+        <strong>${timeLabel(slot.time)}</strong>
         <div>
-          <strong>${appointment.name}</strong>
-          <div class="muted small">${appointment.phone} - Corte - $16.000</div>
+          <strong>${slot.appointment.name}</strong>
+          <div class="muted small">${slot.appointment.phone} - Corte - $16.000</div>
         </div>
         <button class="btn danger" type="button">Eliminar</button>
       `;
-      row.querySelector("button").addEventListener("click", () => deleteAppointment(appointment.id, dateKey));
+      row.querySelector("button").addEventListener("click", () => deleteAppointment(slot.appointment.id, dateKey));
+    } else if (slot.status === "vip") {
+      row.innerHTML = `
+        <strong>${timeLabel(slot.time)}</strong>
+        <div>
+          <strong>${slot.vip.vip.name} <span class="pill vip-pill">VIP</span></strong>
+          <div class="muted small">${slot.vip.vip.phone} - Horario fijo${slot.vip.isRescheduledTo ? " (reagendado)" : ""}</div>
+        </div>
+        <span class="pill">VIP</span>
+      `;
+    } else if (slot.status === "blocked") {
+      row.innerHTML = `
+        <strong>${timeLabel(slot.time)}</strong>
+        <div class="muted">Bloqueado manualmente</div>
+        <button class="btn secondary" type="button">Desbloquear</button>
+      `;
+      row.querySelector("button").addEventListener("click", () => unblockSlot(dateKey, slot.time));
     } else {
       row.innerHTML = `
-        <strong>${timeLabel(time)}</strong>
+        <strong>${timeLabel(slot.time)}</strong>
         <div class="muted">Horario libre</div>
-        <span class="pill">Disponible</span>
+        <button class="btn secondary" type="button">Bloquear</button>
       `;
+      row.querySelector("button").addEventListener("click", () => blockSlot(dateKey, slot.time));
     }
 
     dayAppointments.appendChild(row);
@@ -276,25 +339,100 @@ async function openDay(dateKey) {
   modal.classList.remove("hidden");
 }
 
+async function blockSlot(dateKey, time) {
+  const { error } = await db.from("blocked_slots").insert({ date: dateKey, time });
+  if (error) {
+    showToast("No se pudo bloquear la hora.");
+    console.error(error);
+    return;
+  }
+  await renderCalendar();
+  await openDay(dateKey);
+  showToast("Hora bloqueada.");
+}
+
+async function unblockSlot(dateKey, time) {
+  const { error } = await db.from("blocked_slots").delete().eq("date", dateKey).eq("time", time);
+  if (error) {
+    showToast("No se pudo desbloquear la hora.");
+    console.error(error);
+    return;
+  }
+  await renderCalendar();
+  await openDay(dateKey);
+  showToast("Hora desbloqueada.");
+}
+
 async function deleteAppointment(id, dateKey) {
   const { error } = await db.from("appointments").delete().eq("id", id);
-
   if (error) {
     showToast("No se pudo eliminar la cita.");
     console.error(error);
     return;
   }
-
   await renderCalendar();
   await openDay(dateKey);
   showToast("Cita eliminada del calendario.");
 }
 
+async function openScheduleEditor(dateKey) {
+  activeDateKey = dateKey;
+  const hours = await loadDaySchedule(dateKey);
+  scheduleDraft = new Set(hours);
+  scheduleModalDate.textContent = prettyDate(dateKey);
+  scheduleHoursGrid.innerHTML = "";
+
+  defaultTimesRange().forEach((time) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `slot${scheduleDraft.has(time) ? " selected" : ""}`;
+    button.textContent = timeLabel(time);
+    button.addEventListener("click", () => {
+      if (scheduleDraft.has(time)) scheduleDraft.delete(time);
+      else scheduleDraft.add(time);
+      button.classList.toggle("selected", scheduleDraft.has(time));
+    });
+    scheduleHoursGrid.appendChild(button);
+  });
+
+  scheduleModal.classList.remove("hidden");
+}
+
+async function saveDaySchedule() {
+  if (!activeDateKey) return;
+
+  const hours = [...scheduleDraft].sort();
+  if (hours.length === 0) {
+    showToast("Selecciona al menos una hora de trabajo.");
+    return;
+  }
+
+  const { error } = await db.from("day_schedules").upsert({
+    date: activeDateKey,
+    hours,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "date" });
+
+  if (error) {
+    showToast("No se pudo guardar el horario.");
+    console.error(error);
+    return;
+  }
+
+  scheduleModal.classList.add("hidden");
+  await renderCalendar();
+  await openDay(activeDateKey);
+  showToast("Horario del dia actualizado.");
+}
+
 async function initAdmin() {
   if (!requireBarber()) return;
 
+  populateVipTimeSelect();
+  await refreshVipCache();
   await renderCalendar();
   await renderRegistrationRequests();
+  await renderVipList();
 
   prevMonth.addEventListener("click", async () => {
     visibleMonth.setMonth(visibleMonth.getMonth() - 1);
@@ -307,13 +445,68 @@ async function initAdmin() {
   });
 
   closeModal.addEventListener("click", () => modal.classList.add("hidden"));
-
   modal.addEventListener("click", (event) => {
     if (event.target === modal) modal.classList.add("hidden");
   });
 
+  editScheduleBtn.addEventListener("click", () => {
+    if (activeDateKey) openScheduleEditor(activeDateKey);
+  });
+
+  closeScheduleModal.addEventListener("click", () => scheduleModal.classList.add("hidden"));
+  scheduleModal.addEventListener("click", (event) => {
+    if (event.target === scheduleModal) scheduleModal.classList.add("hidden");
+  });
+  saveScheduleBtn.addEventListener("click", saveDaySchedule);
+
+  openVipForm.addEventListener("click", () => openVipEditor());
+  closeVipModal.addEventListener("click", () => vipModal.classList.add("hidden"));
+  vipModal.addEventListener("click", (event) => {
+    if (event.target === vipModal) vipModal.classList.add("hidden");
+  });
+
+  vipForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const selectedOption = vipClient.selectedOptions[0];
+    const payload = {
+      user_id: vipClient.value,
+      name: selectedOption.dataset.name,
+      phone: selectedOption.dataset.phone,
+      day_of_week: Number(vipDay.value),
+      time: vipTime.value,
+      frequency: vipFrequency.value,
+      active: true,
+      start_date: toDateKey(new Date())
+    };
+
+    const editId = vipEditId.value;
+    const query = editId
+      ? db.from("vip_schedules").update(payload).eq("id", editId)
+      : db.from("vip_schedules").insert(payload);
+
+    const { error } = await query;
+    if (error) {
+      showToast("No se pudo guardar el cliente VIP.");
+      console.error(error);
+      return;
+    }
+
+    vipModal.classList.add("hidden");
+    vipForm.reset();
+    vipClient.disabled = false;
+    await refreshVipCache();
+    await renderVipList();
+    await renderCalendar();
+    showToast(editId ? "VIP actualizado." : "Cliente VIP agregado.");
+  });
+
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") modal.classList.add("hidden");
+    if (event.key === "Escape") {
+      modal.classList.add("hidden");
+      scheduleModal.classList.add("hidden");
+      vipModal.classList.add("hidden");
+    }
   });
 
   logoutBtn.addEventListener("click", () => {

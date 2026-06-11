@@ -27,15 +27,25 @@
     <p>Tu registro aun no ha sido verificado por el barbero. Puedes agendar citas mientras tanto.</p>
   </div>
 
+  <div id="vipBanner" class="alert-banner vip-banner hidden" role="status">
+    <strong>Cliente VIP</strong>
+    <p id="vipBannerText">Tienes horarios fijos reservados. Puedes reagendar un dia puntual si no puedes asistir.</p>
+  </div>
+
+  <div id="reminderBanner" class="alert-banner reminder-banner hidden" role="status">
+    <strong>Recordatorio</strong>
+    <p></p>
+  </div>
+
   <main class="container">
     <section class="hero">
       <div class="hero-copy">
         <p class="eyebrow">JMbarber studio</p>
-        <p>Reserva tu hora en segundos. Atencion de 7:00 a.m. a 9:00 p.m., un solo barbero y un servicio directo: corte profesional por $16.000.</p>
+        <p>Reserva tu hora en los proximos 7 dias. Maximo 2 citas por semana. Atencion de 7:00 a.m. a 9:00 p.m.</p>
         <div class="stat-grid">
-          <div class="stat"><strong>1 servicio</strong><span class="muted small">Corte</span></div>
+          <div class="stat"><strong>2 citas</strong><span class="muted small">Max / 7 dias</span></div>
           <div class="stat"><strong>$16.000</strong><span class="muted small">Precio fijo</span></div>
-          <div class="stat"><strong>7am-9pm</strong><span class="muted small">Horario</span></div>
+          <div class="stat"><strong>7 dias</strong><span class="muted small">Ventana</span></div>
         </div>
       </div>
 
@@ -62,7 +72,7 @@
             <p class="eyebrow">Reserva</p>
             <h2>Elige un dia en el calendario</h2>
           </div>
-          <span class="pill">$16.000</span>
+          <span class="pill" id="bookingQuotaPill">0/2 citas</span>
         </div>
 
         <div class="client-info" aria-label="Tus datos">
@@ -75,6 +85,8 @@
             <strong id="clientPhoneDisplay">-</strong>
           </div>
         </div>
+
+        <p class="muted small window-note">Solo puedes reservar entre hoy y los proximos 7 dias.</p>
 
         <section class="calendar-card client-calendar">
           <div class="calendar-toolbar">
@@ -110,15 +122,15 @@
         </ul>
         <button class="btn full" type="button" id="confirmBooking" disabled>Confirmar cita</button>
         <div class="notice">
-          <strong>Privacidad</strong>
-          <p class="muted small">Solo el barbero puede ver la agenda completa. Aqui solo eliges tu horario disponible.</p>
+          <strong>Limite semanal</strong>
+          <p class="muted small">Puedes tener hasta 2 citas activas en los proximos 7 dias.</p>
         </div>
       </aside>
     </section>
   </main>
 
   <section id="dayModal" class="modal hidden" aria-modal="true" role="dialog">
-    <article class="modal-card">
+    <article class="modal-card modal-card-scroll">
       <div class="modal-head">
         <div>
           <p class="eyebrow">Horarios disponibles</p>
@@ -128,7 +140,33 @@
         <button id="closeModal" class="close" type="button" aria-label="Cerrar">&times;</button>
       </div>
       <div class="modal-body">
+        <div id="vipDayInfo" class="vip-day-info hidden"></div>
         <div id="daySlots" class="slots modal-slots" aria-live="polite"></div>
+      </div>
+    </article>
+  </section>
+
+  <section id="rescheduleModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Reagendar VIP</p>
+          <h2 id="rescheduleTitle">Cambiar cita fija</h2>
+          <p id="rescheduleSubtitle" class="muted">Solo aplica para este dia.</p>
+        </div>
+        <button id="closeRescheduleModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="rescheduleForm" class="form">
+          <label for="rescheduleDate">Nueva fecha
+            <input id="rescheduleDate" type="date" required>
+          </label>
+          <label for="rescheduleTime">Nueva hora
+            <select id="rescheduleTime" required></select>
+          </label>
+          <button class="btn full" type="submit">Guardar cambio solo para este dia</button>
+          <button class="btn secondary full" type="button" id="skipVipBtn">No puedo ir este dia</button>
+        </form>
       </div>
     </article>
   </section>
@@ -136,6 +174,8 @@
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <script src="studio-utils.js"></script>
+  <script src="notify.js"></script>
   <script src="booking.js"></script>
 </body>
 </html>
