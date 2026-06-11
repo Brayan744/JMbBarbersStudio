@@ -65,7 +65,8 @@ function goToBooking(user) {
     id: user.id,
     name: user.name,
     phone: user.phone,
-    role: "client"
+    role: "client",
+    status: user.status
   }));
   window.location.href = "booking.html";
 }
@@ -115,11 +116,6 @@ if (loginForm) {
         return;
       }
 
-      if (user.status === "pending") {
-        showMessage("Tu registro esta pendiente. El barbero debe aprobarte antes de agendar.");
-        return;
-      }
-
       if (user.status === "rejected") {
         showMessage("Tu registro fue rechazado. Comunicate con el barbero para mas informacion.");
         return;
@@ -159,7 +155,7 @@ if (registerForm) {
         document.getElementById("phone").value = phone;
 
         if (existingUser.status === "pending") {
-          showMessage("Ese celular ya tiene un registro pendiente. Espera la aprobacion del barbero.");
+          showMessage("Ese celular ya esta registrado. Entra con tu contrasena para continuar.");
           return;
         }
 
@@ -173,19 +169,21 @@ if (registerForm) {
       }
 
       const passwordHash = await hashPassword(password);
-      const { error } = await db.from("client_users").insert({
-        name,
-        phone,
-        password_hash: passwordHash,
-        status: "pending"
-      });
+      const { data: newUser, error } = await db
+        .from("client_users")
+        .insert({
+          name,
+          phone,
+          password_hash: passwordHash,
+          status: "pending"
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
       registerForm.reset();
-      setActiveTab("login");
-      document.getElementById("phone").value = phone;
-      showMessage("Registro enviado. El barbero debe aprobarte antes de que puedas agendar.", "success");
+      goToBooking(newUser);
     } catch (error) {
       console.error(error);
       showMessage(databaseErrorMessage(error, "No se pudo guardar el registro. Revisa la tabla client_users en Supabase."));

@@ -22,6 +22,11 @@
     </div>
   </header>
 
+  <div id="pendingBanner" class="alert-banner hidden" role="status">
+    <strong>Cuenta en revision</strong>
+    <p>Tu registro aun no ha sido verificado por el barbero. Puedes agendar citas mientras tanto.</p>
+  </div>
+
   <main class="container">
     <section class="hero">
       <div class="hero-copy">
@@ -55,34 +60,39 @@
         <div class="section-head">
           <div>
             <p class="eyebrow">Reserva</p>
-            <h2>Elige fecha y hora</h2>
+            <h2>Elige un dia en el calendario</h2>
           </div>
           <span class="pill">$16.000</span>
         </div>
 
-        <form id="bookingForm" class="form">
-          <div class="booking-grid">
-            <label for="clientName">Nombre completo
-              <input id="clientName" type="text" autocomplete="name" placeholder="Tu nombre" required>
-            </label>
+        <div class="client-info" aria-label="Tus datos">
+          <div class="client-info-item">
+            <span class="muted small">Nombre</span>
+            <strong id="clientNameDisplay">-</strong>
+          </div>
+          <div class="client-info-item">
+            <span class="muted small">Celular</span>
+            <strong id="clientPhoneDisplay">-</strong>
+          </div>
+        </div>
 
-            <label for="clientPhone">Numero de celular
-              <input id="clientPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="3001234567" required>
-            </label>
-
-            <label for="date" class="wide">Fecha
-              <input id="date" type="date" required>
-            </label>
+        <section class="calendar-card client-calendar">
+          <div class="calendar-toolbar">
+            <div>
+              <p class="eyebrow">Calendario</p>
+              <h3 id="monthTitle">Mes</h3>
+            </div>
+            <div class="calendar-actions">
+              <button class="icon-btn" type="button" id="prevMonth" aria-label="Mes anterior">&lt;</button>
+              <button class="icon-btn" type="button" id="nextMonth" aria-label="Mes siguiente">&gt;</button>
+            </div>
           </div>
 
-          <div>
-            <label>Horario disponible</label>
-            <div id="slots" class="slots" aria-live="polite"></div>
-            <input id="time" type="hidden" required>
+          <div class="weekdays" aria-hidden="true">
+            <span>Dom</span><span>Lun</span><span>Mar</span><span>Mie</span><span>Jue</span><span>Vie</span><span>Sab</span>
           </div>
-
-          <button class="btn full" type="submit">Confirmar cita</button>
-        </form>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </section>
       </article>
 
       <aside class="section card">
@@ -95,8 +105,10 @@
         <ul class="summary-list">
           <li><span class="muted">Servicio</span><strong>Corte</strong></li>
           <li><span class="muted">Precio</span><strong>$16.000</strong></li>
-          <li><span class="muted">Hora</span><strong id="selectedSummary">Sin seleccionar</strong></li>
+          <li><span class="muted">Fecha</span><strong id="selectedDateSummary">Sin seleccionar</strong></li>
+          <li><span class="muted">Hora</span><strong id="selectedTimeSummary">Sin seleccionar</strong></li>
         </ul>
+        <button class="btn full" type="button" id="confirmBooking" disabled>Confirmar cita</button>
         <div class="notice">
           <strong>Privacidad</strong>
           <p class="muted small">Solo el barbero puede ver la agenda completa. Aqui solo eliges tu horario disponible.</p>
@@ -104,6 +116,22 @@
       </aside>
     </section>
   </main>
+
+  <section id="dayModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Horarios disponibles</p>
+          <h2 id="modalDate">Fecha</h2>
+          <p id="modalSubtitle" class="muted">Selecciona una hora libre para tu cita.</p>
+        </div>
+        <button id="closeModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="daySlots" class="slots modal-slots" aria-live="polite"></div>
+      </div>
+    </article>
+  </section>
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

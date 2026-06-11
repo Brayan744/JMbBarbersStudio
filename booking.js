@@ -2,19 +2,36 @@ const SERVICE_PRICE = 16000;
 const WORK_START = 7;
 const WORK_END = 21;
 
-const form = document.getElementById("bookingForm");
-const dateInput = document.getElementById("date");
-const timeInput = document.getElementById("time");
-const slotsEl = document.getElementById("slots");
-const selectedSummary = document.getElementById("selectedSummary");
+const calendarGrid = document.getElementById("calendarGrid");
+const monthTitle = document.getElementById("monthTitle");
+const prevMonth = document.getElementById("prevMonth");
+const nextMonth = document.getElementById("nextMonth");
+const modal = document.getElementById("dayModal");
+const modalDate = document.getElementById("modalDate");
+const modalSubtitle = document.getElementById("modalSubtitle");
+const daySlots = document.getElementById("daySlots");
+const closeModal = document.getElementById("closeModal");
+const confirmBooking = document.getElementById("confirmBooking");
+const selectedDateSummary = document.getElementById("selectedDateSummary");
+const selectedTimeSummary = document.getElementById("selectedTimeSummary");
+const clientNameDisplay = document.getElementById("clientNameDisplay");
+const clientPhoneDisplay = document.getElementById("clientPhoneDisplay");
+const pendingBanner = document.getElementById("pendingBanner");
 const toast = document.getElementById("toast");
+
+const monthNames = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+let visibleMonth = new Date();
+visibleMonth.setDate(1);
+
+let selectedDateKey = "";
+let selectedTime = "";
 
 function getCurrentUser() {
   return JSON.parse(localStorage.getItem("currentUser") || "{}");
-}
-
-function normalizePhone(value) {
-  return value.replace(/\D/g, "");
 }
 
 function toDateKey(date) {
@@ -24,9 +41,13 @@ function toDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function prettyDate(dateKey) {
+function makeLocalDate(dateKey) {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
+  return new Date(year, month - 1, day);
+}
+
+function prettyDate(dateKey) {
+  return makeLocalDate(dateKey).toLocaleDateString("es-CO", {
     weekday: "long",
     day: "numeric",
     month: "long"
@@ -55,13 +76,21 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.add("hidden"), 3200);
 }
 
-function setMinimumDate() {
-  const today = toDateKey(new Date());
-  dateInput.min = today;
-  if (!dateInput.value) dateInput.value = today;
+function updateSummary() {
+  selectedDateSummary.textContent = selectedDateKey ? prettyDate(selectedDateKey) : "Sin seleccionar";
+  selectedTimeSummary.textContent = selectedTime ? timeLabel(selectedTime) : "Sin seleccionar";
+  confirmBooking.disabled = !(selectedDateKey && selectedTime);
 }
 
-async function requireApprovedClient() {
+function hydrateUser(user) {
+  if (clientNameDisplay) clientNameDisplay.textContent = user.name || "-";
+  if (clientPhoneDisplay) clientPhoneDisplay.textContent = user.phone || "-";
+  if (pendingBanner) {
+    pendingBanner.classList.toggle("hidden", user.status !== "pending");
+  }
+}
+
+async function requireClient() {
   const currentUser = getCurrentUser();
 
   if (currentUser.role !== "client" || !currentUser.phone) {
@@ -76,54 +105,133 @@ async function requireApprovedClient() {
     .eq("phone", currentUser.phone)
     .maybeSingle();
 
-  if (error || !data || data.status !== "approved") {
+  if (error || !data || data.status === "rejected") {
     localStorage.removeItem("currentUser");
     window.location.href = "loguin.html";
     return null;
   }
 
-  localStorage.setItem("currentUser", JSON.stringify({
+  const sessionUser = {
     id: data.id,
     name: data.name,
     phone: data.phone,
-    role: "client"
-  }));
+    role: "client",
+    status: data.status
+  };
 
+  localStorage.setItem("currentUser", JSON.stringify(sessionUser));
   return data;
 }
 
-async function loadBusyTimes(date) {
+async function loadAppointmentsBetween(startKey, endKey) {
+  const { data, error } = await db
+    .from("appointments")
+    .select("date, time")
+    .gte("date", startKey)
+    .lte("date", endKey);
+
+  if (error) throw error;
+  return data;
+}
+
+async function loadBusyTimes(dateKey) {
   const { data, error } = await db
     .from("appointments")
     .select("time")
-    .eq("date", date);
+    .eq("date", dateKey);
 
   if (error) throw error;
   return data.map((appointment) => appointment.time);
 }
 
-async function renderSlots() {
-  const date = dateInput.value;
-  let busyTimes = [];
+function isPastDate(dateKey) {
+  const todayKey = toDateKey(new Date());
+  return dateKey < todayKey;
+}
 
-  slotsEl.innerHTML = `<div class="empty">Cargando horarios...</div>`;
-  timeInput.value = "";
-  selectedSummary.textContent = date ? prettyDate(date) : "Sin seleccionar";
+async function renderCalendar() {
+  const year = visibleMonth.getFullYear();
+  const month = visibleMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - firstDay.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 41);
 
+  monthTitle.textContent = `${monthNames[month]} ${year}`;
+  calendarGrid.innerHTML = `<div class="empty">Cargando calendario...</div>`;
+
+  let appointments = [];
   try {
-    busyTimes = await loadBusyTimes(date);
+    appointments = await loadAppointmentsBetween(toDateKey(start), toDateKey(end));
   } catch (error) {
-    slotsEl.innerHTML = `<div class="empty">No se pudieron cargar los horarios.</div>`;
+    calendarGrid.innerHTML = `<div class="empty">No se pudo cargar el calendario.</div>`;
     console.error(error);
     return;
   }
 
-  slotsEl.innerHTML = "";
+  calendarGrid.innerHTML = "";
+
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const dateKey = toDateKey(date);
+    const dayAppointments = appointments.filter((appointment) => appointment.date === dateKey);
+    const isCurrentMonth = date.getMonth() === month;
+    const isToday = dateKey === toDateKey(new Date());
+    const isPast = isPastDate(dateKey);
+    const freeSlots = timesRange().length - dayAppointments.length;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `day${isCurrentMonth ? "" : " outside"}${isToday ? " today" : ""}${isPast ? " past" : ""}`;
+    button.innerHTML = `
+      <span class="day-number">${date.getDate()}</span>
+      <span class="day-meta">
+        <span>${isPast ? "Pasado" : freeSlots === timesRange().length ? "Libre" : `${freeSlots} libres`}</span>
+        ${dayAppointments.length && !isPast ? '<span class="dot"></span>' : ""}
+      </span>
+    `;
+
+    if (!isPast) {
+      button.addEventListener("click", () => openDay(dateKey));
+    } else {
+      button.disabled = true;
+    }
+
+    calendarGrid.appendChild(button);
+  }
+}
+
+async function openDay(dateKey) {
+  let busyTimes = [];
+
+  daySlots.innerHTML = `<div class="empty">Cargando horarios...</div>`;
+  modalDate.textContent = prettyDate(dateKey);
+  modalSubtitle.textContent = "Selecciona una hora libre para tu cita.";
+  modal.classList.remove("hidden");
+
+  try {
+    busyTimes = await loadBusyTimes(dateKey);
+  } catch (error) {
+    daySlots.innerHTML = `<div class="empty">No se pudieron cargar los horarios.</div>`;
+    console.error(error);
+    return;
+  }
+
+  const availableTimes = timesRange().filter((time) => !busyTimes.includes(time));
+
+  if (availableTimes.length === 0) {
+    daySlots.innerHTML = `<div class="empty">No hay horarios disponibles este dia. Elige otra fecha.</div>`;
+    return;
+  }
+
+  daySlots.innerHTML = "";
 
   timesRange().forEach((time) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "slot";
+    button.className = `slot${selectedDateKey === dateKey && selectedTime === time ? " selected" : ""}`;
     button.textContent = timeLabel(time);
     button.dataset.time = time;
 
@@ -131,89 +239,92 @@ async function renderSlots() {
       button.disabled = true;
       button.classList.add("busy");
       button.title = "Horario ocupado";
+      daySlots.appendChild(button);
+      return;
     }
 
     button.addEventListener("click", () => {
-      document.querySelectorAll(".slot.selected").forEach((slot) => slot.classList.remove("selected"));
-      button.classList.add("selected");
-      timeInput.value = time;
-      selectedSummary.textContent = `${prettyDate(date)} - ${timeLabel(time)}`;
+      selectedDateKey = dateKey;
+      selectedTime = time;
+      updateSummary();
+      modal.classList.add("hidden");
+      showToast(`Horario seleccionado: ${prettyDate(dateKey)} - ${timeLabel(time)}`);
     });
 
-    slotsEl.appendChild(button);
+    daySlots.appendChild(button);
   });
 }
 
-function hydrateUser(user) {
-  const nameInput = document.getElementById("clientName");
-  const phoneInput = document.getElementById("clientPhone");
+async function submitBooking() {
+  const user = getCurrentUser();
 
-  if (user.name && nameInput) nameInput.value = user.name;
-  if (user.phone && phoneInput) phoneInput.value = user.phone;
+  if (!selectedDateKey || !selectedTime) {
+    showToast("Selecciona un dia y una hora disponible.");
+    return;
+  }
+
+  const { error } = await db.from("appointments").insert({
+    user_id: user.id,
+    name: user.name,
+    phone: user.phone,
+    date: selectedDateKey,
+    time: selectedTime,
+    service: "Corte",
+    price: SERVICE_PRICE
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      showToast("Ese horario acaba de ocuparse. Elige otro.");
+      selectedTime = "";
+      updateSummary();
+      await openDay(selectedDateKey);
+      await renderCalendar();
+      return;
+    }
+
+    showToast("No se pudo confirmar la cita. Revisa la conexion.");
+    console.error(error);
+    return;
+  }
+
+  selectedTime = "";
+  updateSummary();
+  await renderCalendar();
+  showToast("Cita confirmada. Te esperamos en JMbarber.");
 }
 
 async function initBooking() {
-  const approvedUser = await requireApprovedClient();
-  if (!approvedUser) return;
+  const clientUser = await requireClient();
+  if (!clientUser) return;
 
-  setMinimumDate();
-  hydrateUser(approvedUser);
-  await renderSlots();
+  hydrateUser(clientUser);
+  updateSummary();
+  await renderCalendar();
 
-  dateInput.addEventListener("change", renderSlots);
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const user = getCurrentUser();
-    const name = document.getElementById("clientName").value.trim();
-    const phone = normalizePhone(document.getElementById("clientPhone").value);
-    const date = dateInput.value;
-    const time = timeInput.value;
-
-    if (!time) {
-      showToast("Selecciona una hora disponible para continuar.");
-      return;
-    }
-
-    const { error } = await db.from("appointments").insert({
-      user_id: user.id,
-      name,
-      phone,
-      date,
-      time,
-      service: "Corte",
-      price: SERVICE_PRICE
-    });
-
-    if (error) {
-      if (error.code === "23505") {
-        showToast("Ese horario acaba de ocuparse. Elige otro.");
-        await renderSlots();
-        return;
-      }
-
-      showToast("No se pudo confirmar la cita. Revisa la conexion.");
-      console.error(error);
-      return;
-    }
-
-    localStorage.setItem("currentUser", JSON.stringify({
-      ...user,
-      name,
-      phone,
-      role: "client"
-    }));
-
-    form.reset();
-    dateInput.value = date;
-    document.getElementById("clientName").value = name;
-    document.getElementById("clientPhone").value = phone;
-    await renderSlots();
-    showToast("Cita confirmada. Te esperamos en JMbarber.");
+  prevMonth.addEventListener("click", async () => {
+    visibleMonth.setMonth(visibleMonth.getMonth() - 1);
+    await renderCalendar();
   });
+
+  nextMonth.addEventListener("click", async () => {
+    visibleMonth.setMonth(visibleMonth.getMonth() + 1);
+    await renderCalendar();
+  });
+
+  closeModal.addEventListener("click", () => modal.classList.add("hidden"));
+
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) modal.classList.add("hidden");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") modal.classList.add("hidden");
+  });
+
+  confirmBooking.addEventListener("click", submitBooking);
 }
 
-if (form) {
+if (calendarGrid) {
   initBooking();
 }

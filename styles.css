@@ -490,6 +490,65 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+.alert-banner {
+  width: min(1120px, calc(100% - 32px));
+  margin: 18px auto 0;
+  border: 1px solid rgba(213, 155, 83, 0.45);
+  border-radius: 8px;
+  padding: 14px 18px;
+  background: rgba(213, 155, 83, 0.14);
+  color: var(--ink);
+}
+
+.alert-banner.hidden {
+  display: none;
+}
+
+.alert-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.alert-banner p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.client-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.client-info-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.client-calendar {
+  padding: 0;
+  background: transparent;
+}
+
+.client-calendar .day {
+  min-height: 92px;
+}
+
+.day.past {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.modal-slots {
+  margin-top: 0;
+}
+
 .slots {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -847,7 +906,8 @@ select:focus {
   }
 
   .booking-grid,
-  .stat-grid {
+  .stat-grid,
+  .client-info {
     grid-template-columns: 1fr;
   }
 
