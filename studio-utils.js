@@ -61,32 +61,22 @@ function timeLabel(time) {
  
 function defaultTimesRange(dateKey) {
   const times = [];
-  let dayOfWeek = -1;
+  
+  // Si no hay dateKey, usamos la fecha de hoy para determinar el horario por defecto
+  const referenceDate = dateKey ? makeLocalDate(dateKey) : new Date();
+  const dayOfWeek = referenceDate.getDay(); 
 
-  if (dateKey) {
-    // Obtenemos el día (0: Domingo, 1: Lunes, ..., 6: Sábado)
-    dayOfWeek = makeLocalDate(dateKey).getDay();
-  }
+  // Lunes (1), Martes (2), Miércoles (3) -> Empiezan a las 9 AM
+  // Jueves (4), Viernes (5), Sábado (6), Domingo (0) -> Empiezan a las 8 AM
+  let startHour = (dayOfWeek >= 1 && dayOfWeek <= 3) ? 9 : 8;
 
-  // Definir hora de inicio según el día
-  // Lunes (1), Martes (2), Miércoles (3) -> Inician a las 9 AM
-  // Jueves (4), Viernes (5), Sábado (6), Domingo (0) -> Inician a las 8 AM
-  let startHour = 8;
-  if (dayOfWeek >= 1 && dayOfWeek <= 3) {
-    startHour = 9;
-  } else if (dayOfWeek === -1) {
-    // Si no se pasa fecha (usado en selects generales), usamos 8 como base
-    startHour = 8;
-  }
-
-  // Bloque de la mañana: hasta las 1 PM (13:00)
+  // Bloque Mañana: Desde startHour hasta las 12:00 PM (la última es 12:00, pues a la 1:00 es almuerzo)
   for (let hour = startHour; hour < 13; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
 
-  // Bloque de la tarde: de 2 PM (14:00) a 9 PM (21:00)
-  // Nota: El loop llega hasta < 21 para que la última cita sea a las 8:00 PM (terminando a las 9)
-  // Si quieres que la última cita inicie a las 9:00 PM, cambia a <= 21.
+  // Bloque Tarde: Desde las 2 PM (14:00) hasta las 8 PM (20:00)
+  // (Para que la jornada termine a las 9 PM)
   for (let hour = 14; hour < 21; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
@@ -99,9 +89,16 @@ function defaultTimesRange(dateKey) {
  */
 async function loadDaySchedule(dateKey) {
   const record = await loadDayScheduleRecord(dateKey);
+  
   if (record?.closed) return [];
-  // Si el barbero no ha personalizado el horario, usamos el nuevo rango dinámico
-  return record?.hours?.length ? [...record.hours].sort() : defaultTimesRange(dateKey);
+  
+  // IMPORTANTE: Si record.hours existe pero está vacío o no existe, 
+  // ejecutamos defaultTimesRange pasando el dateKey obligatoriamente.
+  if (record && record.hours && record.hours.length > 0) {
+    return [...record.hours].sort();
+  }
+  
+  return defaultTimesRange(dateKey);
 }
 
 function getClientWindowStart() {
