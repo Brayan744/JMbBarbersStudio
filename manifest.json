@@ -1,0 +1,21 @@
+{
+  "name": "JMbarber Studio",
+  "short_name": "JMbarber",
+  "description": "Agenda de citas JMbarber",
+  "start_url": "loguin.html",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#d59b53",
+  "icons": [
+    {
+      "src": "ChatGPT Image 10 jun 2026, 03_23_02.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "ChatGPT Image 10 jun 2026, 03_23_02.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
