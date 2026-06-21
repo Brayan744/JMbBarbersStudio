@@ -614,7 +614,7 @@ async function openScheduleEditor(dateKey) {
   }
   updateScheduleEditorState();
 
-  defaultTimesRange().forEach((time) => {
+  defaultTimesRange(dateKey).forEach((time) => {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.time = time;

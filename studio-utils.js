@@ -1,5 +1,5 @@
 const STUDIO = {
-  WORK_START: 7,
+  WORK_START: 8, 
   WORK_END: 21,
   PRICE: 16000,
   BARBER_PHONE: "3014300748",
@@ -56,12 +56,52 @@ function timeLabel(time) {
   return `${hour12}:00 ${suffix}`;
 }
 
-function defaultTimesRange() {
+
+
+ 
+function defaultTimesRange(dateKey) {
   const times = [];
-  for (let hour = STUDIO.WORK_START; hour < STUDIO.WORK_END; hour += 1) {
+  let dayOfWeek = -1;
+
+  if (dateKey) {
+    // Obtenemos el día (0: Domingo, 1: Lunes, ..., 6: Sábado)
+    dayOfWeek = makeLocalDate(dateKey).getDay();
+  }
+
+  // Definir hora de inicio según el día
+  // Lunes (1), Martes (2), Miércoles (3) -> Inician a las 9 AM
+  // Jueves (4), Viernes (5), Sábado (6), Domingo (0) -> Inician a las 8 AM
+  let startHour = 8;
+  if (dayOfWeek >= 1 && dayOfWeek <= 3) {
+    startHour = 9;
+  } else if (dayOfWeek === -1) {
+    // Si no se pasa fecha (usado en selects generales), usamos 8 como base
+    startHour = 8;
+  }
+
+  // Bloque de la mañana: hasta las 1 PM (13:00)
+  for (let hour = startHour; hour < 13; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
+
+  // Bloque de la tarde: de 2 PM (14:00) a 9 PM (21:00)
+  // Nota: El loop llega hasta < 21 para que la última cita sea a las 8:00 PM (terminando a las 9)
+  // Si quieres que la última cita inicie a las 9:00 PM, cambia a <= 21.
+  for (let hour = 14; hour < 21; hour++) {
+    times.push(`${String(hour).padStart(2, "0")}:00`);
+  }
+
   return times;
+}
+
+/**
+ * Actualizamos esta función para que pase la fecha a defaultTimesRange
+ */
+async function loadDaySchedule(dateKey) {
+  const record = await loadDayScheduleRecord(dateKey);
+  if (record?.closed) return [];
+  // Si el barbero no ha personalizado el horario, usamos el nuevo rango dinámico
+  return record?.hours?.length ? [...record.hours].sort() : defaultTimesRange(dateKey);
 }
 
 function getClientWindowStart() {

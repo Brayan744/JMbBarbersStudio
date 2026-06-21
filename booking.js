@@ -400,7 +400,8 @@ async function openDay(dateKey) {
 }
 
 function populateRescheduleTimeOptions(dateKey) {
-  rescheduleTime.innerHTML = defaultTimesRange()
+  // Ahora pasamos dateKey para que el modal de reagendar muestre las horas correctas de ese día
+  rescheduleTime.innerHTML = defaultTimesRange(dateKey) 
     .map((time) => `<option value="${time}">${timeLabel(time)}</option>`)
     .join("");
 }
