@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel administrativo | JMbarber</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-shell">
+  <header class="topbar">
+    <div class="container nav">
+      <a class="brand" href="admin.html" aria-label="Panel JMbarber">
+        <span class="brand-mark">
+          <img src="ChatGPT Image 10 jun 2026, 03_23_02.png" alt="Logo JMbarber">
+        </span>
+        <div>
+          Panel del barbero
+          <span>Calendario de citas</span>
+        </div>
+      </a>
+      <div class="nav-actions">
+        <a class="btn secondary" href="about.html">Sobre MI</a>
+        <button class="btn secondary" type="button" id="manageAboutBtn">Gestionar Sobre MI</button>
+        <a class="btn secondary" href="loguin.html" id="logoutBtn">Cerrar sesion</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container admin-layout">
+    <aside class="sidebar card">
+      <p class="eyebrow">Administracion</p>
+      <h1>Control diario</h1>
+      <p class="muted">Selecciona una fecha del calendario para gestionar horas, bloqueos y citas.</p>
+
+      <div class="metric">
+        <span class="muted">Citas hoy</span>
+        <strong id="todayCount">0</strong>
+      </div>
+      <div class="metric">
+        <span class="muted">Citas del mes</span>
+        <strong id="monthCount">0</strong>
+      </div>
+      <div class="metric">
+        <span class="muted">Registros pendientes</span>
+        <strong id="pendingCount">0</strong>
+      </div>
+      <div class="metric">
+        <span class="muted">Clientes VIP</span>
+        <strong id="vipCount" style="font-size: 24px;">0</strong>
+      </div>
+    </aside>
+
+    <div class="admin-main">
+      <section class="calendar-card card">
+        <div class="calendar-toolbar">
+          <div>
+            <p class="eyebrow">Calendario</p>
+            <h2 id="monthTitle">Mes</h2>
+          </div>
+          <div class="calendar-actions">
+            <button class="icon-btn" type="button" id="prevMonth" aria-label="Mes anterior">&lt;</button>
+            <button class="icon-btn" type="button" id="nextMonth" aria-label="Mes siguiente">&gt;</button>
+          </div>
+        </div>
+
+        <div class="weekdays" aria-hidden="true">
+          <span>Dom</span><span>Lun</span><span>Mar</span><span>Mie</span><span>Jue</span><span>Vie</span><span>Sab</span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </section>
+
+      <section class="section card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Clientes VIP</p>
+            <h2>Horarios fijos recurrentes</h2>
+          </div>
+          <button class="btn" type="button" id="openVipForm">Agregar VIP</button>
+        </div>
+        <div id="vipList" class="request-list"></div>
+      </section>
+
+      <section class="section card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Clientes</p>
+            <h2>Solicitudes de registro</h2>
+          </div>
+          <span class="pill" id="pendingPill">0 pendientes</span>
+        </div>
+        <div id="registrationRequests" class="request-list"></div>
+      </section>
+
+      <section class="section card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Alertas</p>
+            <h2>Notificaciones en celular</h2>
+          </div>
+        </div>
+        <p class="muted small">Recibe aviso cuando un cliente reserve y recordatorios de citas. En iPhone, agrega el panel a la pantalla de inicio.</p>
+        <button class="btn full" type="button" id="enablePushBtn">Activar notificaciones</button>
+        <p id="pushStatus" class="muted small push-status"></p>
+      </section>
+    </div>
+  </main>
+
+  <section id="dayModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card modal-card-scroll">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Agenda del dia</p>
+          <h2 id="modalDate">Fecha</h2>
+          <p id="modalSubtitle" class="muted">Horario del dia</p>
+        </div>
+        <div class="modal-head-actions">
+          <button class="btn secondary" type="button" id="editScheduleBtn">Editar horario</button>
+          <button id="closeModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="dayAppointments" class="timeline"></div>
+      </div>
+    </article>
+  </section>
+
+  <section id="scheduleModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card modal-card-scroll">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Horario personalizado</p>
+          <h2 id="scheduleModalDate">Fecha</h2>
+          <p class="muted">Marca las horas en las que trabajaras este dia.</p>
+        </div>
+        <button id="closeScheduleModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="day-off-toggle">
+          <input type="checkbox" id="dayOffToggle">
+          <span>No trabajare este dia (dia de descanso)</span>
+        </label>
+        <p id="scheduleEditorNote" class="muted small">Marca las horas en las que trabajaras este dia.</p>
+        <div id="scheduleHoursGrid" class="slots modal-slots"></div>
+        <button class="btn full" type="button" id="saveScheduleBtn">Guardar horario del dia</button>
+      </div>
+    </article>
+  </section>
+
+  <section id="vipModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Cliente VIP</p>
+          <h2 id="vipModalTitle">Agregar VIP</h2>
+        </div>
+        <button id="closeVipModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="vipForm" class="form">
+          <input type="hidden" id="vipEditId">
+          <label for="vipClient">Cliente
+            <select id="vipClient" required></select>
+          </label>
+          <label for="vipDay">Dia de la semana
+            <select id="vipDay" required>
+              <option value="1">Lunes</option>
+              <option value="2">Martes</option>
+              <option value="3">Miercoles</option>
+              <option value="4">Jueves</option>
+              <option value="5">Viernes</option>
+              <option value="6">Sabado</option>
+              <option value="0">Domingo</option>
+            </select>
+          </label>
+          <label for="vipTime">Hora fija
+            <select id="vipTime" required></select>
+          </label>
+          <label for="vipFrequency">Frecuencia
+            <select id="vipFrequency" required>
+              <option value="weekly">Cada semana</option>
+              <option value="biweekly">Cada 15 dias</option>
+            </select>
+          </label>
+          <button class="btn full" type="submit">Guardar VIP</button>
+        </form>
+      </div>
+    </article>
+  </section>
+
+  <section id="aboutModal" class="modal hidden" aria-modal="true" role="dialog">
+    <article class="modal-card modal-card-scroll">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Editar Sobre nosotros</p>
+          <h2>Contenido público</h2>
+          <p class="muted">Actualiza la página que ven tus clientes.</p>
+        </div>
+        <button id="closeAboutModal" class="close" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="aboutForm" class="form">
+          <label for="aboutHeroTitle">Titulo principal
+            <input id="aboutHeroTitle" type="text" required>
+          </label>
+          <label for="aboutHeroText">Texto principal
+            <textarea id="aboutHeroText" rows="4" required></textarea>
+          </label>
+          <label for="aboutHeroImage">URL imagen destacada
+            <input id="aboutHeroImage" type="url" required>
+          </label>
+          <label for="aboutStoryTitle">Titulo historia
+            <input id="aboutStoryTitle" type="text" required>
+          </label>
+          <label for="aboutStoryText">Texto historia
+            <textarea id="aboutStoryText" rows="4" required></textarea>
+          </label>
+          <label for="aboutPromoTitle">Titulo promocion
+            <input id="aboutPromoTitle" type="text" required>
+          </label>
+          <label for="aboutPromoText">Texto promocion
+            <textarea id="aboutPromoText" rows="3" required></textarea>
+          </label>
+          <label for="aboutGallery1">Imagen galeria 1
+            <input id="aboutGallery1" type="url">
+          </label>
+          <label for="aboutGallery2">Imagen galeria 2
+            <input id="aboutGallery2" type="url">
+          </label>
+          <label for="aboutGallery3">Imagen galeria 3
+            <input id="aboutGallery3" type="url">
+          </label>
+          <button class="btn full" type="submit">Guardar cambios</button>
+        </form>
+        <hr style="margin:18px 0;border:none;border-top:1px solid rgba(232,190,126,0.08)" />
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Publicaciones</p>
+            <h2>Feed público del barbero</h2>
+          </div>
+          <button class="btn" type="button" id="addAboutPostBtn">Agregar elemento</button>
+        </div>
+        <div id="aboutPostForm" class="form hidden" style="margin-bottom:16px;">
+          <input type="hidden" id="aboutPostEditId">
+          <label for="aboutPostType">Tipo
+            <select id="aboutPostType">
+              <option value="image">Imagen (URL)</option>
+              <option value="video">Video (URL)</option>
+              <option value="text">Comentario</option>
+            </select>
+          </label>
+          <label for="aboutPostUrl">URL (imagen/video)
+            <input id="aboutPostUrl" type="url">
+          </label>
+          <label for="aboutPostText">Texto
+            <textarea id="aboutPostText" rows="3"></textarea>
+          </label>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" type="button" id="saveAboutPostBtn">Guardar</button>
+            <button class="btn secondary" type="button" id="cancelAboutPostBtn">Cancelar</button>
+          </div>
+        </div>
+        <div id="aboutPosts" class="request-list"></div>
+      </div>
+    </article>
+  </section>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="studio-utils.js"></script>
+  <script src="push.js"></script>
+  <script src="notify.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

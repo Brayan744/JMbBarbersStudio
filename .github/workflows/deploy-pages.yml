@@ -1,0 +1,54 @@
+name: Publicar sitio y desplegar funciones
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+
+      # --- PARTE 1: PUBLICAR EN GITHUB PAGES ---
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir archivos estaticos
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Desplegar Web
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # --- PARTE 2: DESPLEGAR FUNCIONES EN SUPABASE ---
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Desplegar Función Enviar Notificaciones
+        run: supabase functions deploy send-notifications --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Desplegar Función Procesar Recordatorios
+        run: supabase functions deploy process-reminders --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
