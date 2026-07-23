@@ -1,5 +1,5 @@
 const BARBER_DEFAULT = {
-  phone: "3014300748",
+  phone: "3116252905",
   password: "2602"
 };
 
