@@ -348,10 +348,20 @@ async function updateUserStatus(userId, status) {
   showToast(status === "approved" ? "Cliente aprobado." : "Registro rechazado.");
 }
 
-function populateVipTimeSelect() {
-  vipTime.innerHTML = defaultTimesRange()
+function populateVipTimeSelect(dayOfWeek = null) {
+  const day = dayOfWeek !== null ? Number(dayOfWeek) : (vipDay ? Number(vipDay.value) : 6);
+  // Se genera la lista de horas considerando si es viernes (5) o sábado (6) desde a las 8:00 a.m.
+  const dummyDateKey = `2026-08-0${2 + day}`;
+  const times = defaultTimesRange(dummyDateKey);
+  const currentVal = vipTime.value;
+  
+  vipTime.innerHTML = times
     .map((time) => `<option value="${time}">${timeLabel(time)}</option>`)
     .join("");
+
+  if (currentVal && times.includes(currentVal)) {
+    vipTime.value = currentVal;
+  }
 }
 
 async function populateVipClientSelect(selectedId = "") {
@@ -395,8 +405,13 @@ function openVipEditor(vip = null) {
   populateVipClientSelect(vip?.user_id || "");
   vipEditId.value = vip?.id || "";
   vipModalTitle.textContent = vip ? "Editar VIP" : "Agregar VIP";
-  vipDay.value = String(vip?.day_of_week ?? 6);
-  vipTime.value = vip?.time || "16:00";
+  const selectedDay = Number(vip?.day_of_week ?? 6);
+  vipDay.value = String(selectedDay);
+  
+  // Carga el selector de horas según el día elegido (Viernes/Sábado -> 8:00 a.m.)
+  populateVipTimeSelect(selectedDay);
+  vipTime.value = vip?.time || (selectedDay === 5 || selectedDay === 6 ? "08:00" : "09:00");
+  
   vipFrequency.value = vip?.frequency || "weekly";
   vipClient.disabled = Boolean(vip);
   vipModal.classList.remove("hidden");
@@ -782,6 +797,7 @@ async function initAdmin() {
   vipModal.addEventListener("click", (event) => {
     if (event.target === vipModal) vipModal.classList.add("hidden");
   });
+  vipDay?.addEventListener("change", () => populateVipTimeSelect(Number(vipDay.value)));
 
   vipForm.addEventListener("submit", async (event) => {
     event.preventDefault();
