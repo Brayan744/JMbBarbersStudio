@@ -62,22 +62,25 @@ function timeLabel(time) {
 function defaultTimesRange(dateKey) {
   const times = [];
   
-  // Si no hay dateKey, usamos la fecha de hoy para determinar el horario por defecto
   const referenceDate = dateKey ? makeLocalDate(dateKey) : new Date();
-  const dayOfWeek = referenceDate.getDay(); 
+  const dayOfWeek = referenceDate.getDay(); // 0: Domingo, 1: Lunes, ..., 5: Viernes, 6: Sábado
 
-  // Lunes (1), Martes (2), Miércoles (3) -> Empiezan a las 9 AM
-  // Jueves (4), Viernes (5), Sábado (6), Domingo (0) -> Empiezan a las 8 AM
-  let startHour = (dayOfWeek >= 1 && dayOfWeek <= 3) ? 9 : 8;
+  // 1. Únicamente los días Viernes (5) y Sábado (6) inician a las 8:00 a.m.
+  //    El resto de días de la semana inician a las 9:00 a.m.
+  const startHour = (dayOfWeek === 5 || dayOfWeek === 6) ? 8 : 9;
 
-  // Bloque Mañana: Desde startHour hasta las 12:00 PM (la última es 12:00, pues a la 1:00 es almuerzo)
-  for (let hour = startHour; hour < 13; hour++) {
+  // Bloque de la mañana (hasta las 12:00 p.m.)
+  for (let hour = startHour; hour <= 12; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
 
-  // Bloque Tarde: Desde las 2 PM (14:00) hasta las 8 PM (20:00)
-  // (Para que la jornada termine a las 9 PM)
-  for (let hour = 14; hour < 21; hour++) {
+  // 2. Únicamente el día Sábado (6) tiene disponible la hora 1:00 p.m. (13:00)
+  if (dayOfWeek === 6) {
+    times.push("13:00");
+  }
+
+  // Bloque de la tarde (desde las 2:00 p.m. hasta las 8:00 p.m.)
+  for (let hour = 14; hour <= 20; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
 
