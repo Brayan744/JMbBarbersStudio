@@ -169,17 +169,15 @@ async function loadUserAppointments(userId) {
 }
 
 async function renderAppointmentBanners() {
-  if (!upcomingBanner || !upcomingList || !pastBanner || !pastList || !currentClient) return;
+  // 1. Quitamos pastBanner y pastList de aquí para que no de error
+  if (!upcomingBanner || !upcomingList || !currentClient) return;
 
   const appointments = await loadUserAppointments(currentClient.id);
   const now = Date.now();
 
+  // 2. Filtramos solo las citas futuras
   const upcomingItems = appointments
     .filter((item) => getAppointmentTimestamp(item.date, item.time) > now)
-    .map((item) => ({ dateKey: item.date, time: item.time, kind: "Cita" }));
-
-  const pastItems = appointments
-    .filter((item) => getAppointmentTimestamp(item.date, item.time) <= now)
     .map((item) => ({ dateKey: item.date, time: item.time, kind: "Cita" }));
 
   const vipItems = [];
@@ -191,8 +189,6 @@ async function renderAppointmentBanners() {
       const isFuture = getAppointmentTimestamp(dateKey, item.time) > now;
       if (isFuture) {
         vipItems.push({ dateKey, time: item.time, kind: "VIP" });
-      } else {
-        pastItems.push({ dateKey, time: item.time, kind: "VIP" });
       }
     });
   }
@@ -202,6 +198,7 @@ async function renderAppointmentBanners() {
     return left.dateKey.localeCompare(right.dateKey);
   });
 
+  // 3. Mostramos el banner solo si hay citas próximas
   if (upcomingListItems.length === 0) {
     upcomingBanner.classList.add("hidden");
     upcomingList.innerHTML = "";
@@ -211,22 +208,8 @@ async function renderAppointmentBanners() {
       .join("");
     upcomingBanner.classList.remove("hidden");
   }
-
-  const pastListItems = pastItems
-    .sort((left, right) => {
-      if (left.dateKey === right.dateKey) return left.time.localeCompare(right.time);
-      return left.dateKey.localeCompare(right.dateKey);
-    });
-
-  if (pastListItems.length === 0) {
-    pastBanner.classList.add("hidden");
-    pastList.innerHTML = "";
-  } else {
-    pastList.innerHTML = pastListItems
-      .map((item) => `<li><strong>${prettyDateShort(item.dateKey)}</strong> - ${timeLabel(item.time)} <span class="pill">${item.kind}</span></li>`)
-      .join("");
-    pastBanner.classList.remove("hidden");
-  }
+  
+  // Borramos todo lo relacionado a pastBanner que estaba aquí abajo
 }
 
 async function renderCalendar() {
