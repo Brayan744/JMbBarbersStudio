@@ -475,9 +475,12 @@ async function renderCalendar() {
       
       const daySchedule = schedMap.get(dateKey);
       const dayAppointments = appMap.get(dateKey) || [];
+
+      // NUEVO: Obtenemos los VIP de este día específico antes de calcular los slots
+      const vipOccurrences = getVipOccurrencesForDate(cachedVipSchedules, cachedVipExceptions, dateKey);
       
-      // Calculamos los slots de ese día sin ir a internet
-      const slots = buildDaySlotsSync(dateKey, daySchedule, dayAppointments, blockMap);
+      // Pasamos los vipOccurrences a la función
+      const slots = buildDaySlotsSync(dateKey, daySchedule, dayAppointments, blockMap, vipOccurrences);
       const summary = summarizeDaySlots(slots);
 
       const isCurrentMonth = date.getMonth() === month;
