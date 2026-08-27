@@ -520,24 +520,34 @@ async function renderCalendar() {
   }
 }
 
-function buildDaySlotsSync(dateKey, scheduleRecord, appointments, blockMap) {
+function buildDaySlotsSync(dateKey, scheduleRecord, appointments, blockMap, vipOccurrences) {
   if (scheduleRecord?.closed) return [];
 
-  // Usamos el horario por defecto (8am o 9am) si no hay horario personalizado
+  // Usamos el horario personalizado o el por defecto
   const workingHours = scheduleRecord?.hours?.length 
     ? [...scheduleRecord.hours].sort() 
     : defaultTimesRange(dateKey);
 
   const appointmentByTime = new Map(appointments.map((item) => [item.time, item]));
+  
+  // NUEVO: Creamos un mapa de los VIP que NO se han movido de este día
+  const vipByTime = new Map(
+    vipOccurrences
+      .filter(v => !v.isRescheduledAway)
+      .map(v => [v.time, v])
+  );
 
   return workingHours.map((time) => {
     if (appointmentByTime.has(time)) {
       return { time, status: "booked", appointment: appointmentByTime.get(time) };
     }
+    // NUEVO: Si la hora está ocupada por un VIP, se marca como ocupada
+    if (vipByTime.has(time)) {
+      return { time, status: "vip" }; 
+    }
     if (blockMap.has(`${dateKey}_${time}`)) {
       return { time, status: "blocked" };
     }
-    // (Aquí podrías agregar lógica VIP si la necesitas)
     return { time, status: "free" };
   });
 }
