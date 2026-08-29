@@ -56,30 +56,26 @@ function timeLabel(time) {
   return `${hour12}:00 ${suffix}`;
 }
 
-
-
- 
+// --- FUNCIÓN DE HORARIOS CORREGIDA ---
 function defaultTimesRange(dateKey) {
   const times = [];
-  
   const referenceDate = dateKey ? makeLocalDate(dateKey) : new Date();
-  const dayOfWeek = referenceDate.getDay(); // 0: Domingo, 1: Lunes, ..., 5: Viernes, 6: Sábado
+  const dayOfWeek = referenceDate.getDay(); // 0: Dom, 1: Lun... 5: Vie, 6: Sab
 
-  // 1. Únicamente los días Viernes (5) y Sábado (6) inician a las 8:00 a.m.
-  //    El resto de días de la semana inician a las 9:00 a.m.
+  // Inicio: Viernes(5) y Sábado(6) a las 8am. Resto a las 9am.
   const startHour = (dayOfWeek === 5 || dayOfWeek === 6) ? 8 : 9;
 
-  // Bloque de la mañana (hasta las 12:00 p.m.)
+  // Bloque Mañana: hasta las 12:00
   for (let hour = startHour; hour <= 12; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
 
-  // 2. Únicamente el día Sábado (6) tiene disponible la hora 1:00 p.m. (13:00)
+  // Bloque 1:00 PM (13:00): ÚNICAMENTE Sábados
   if (dayOfWeek === 6) {
     times.push("13:00");
   }
 
-  // Bloque de la tarde (desde las 2:00 p.m. hasta las 8:00 p.m.)
+  // Bloque Tarde: de 2pm (14:00) a 8pm (20:00)
   for (let hour = 14; hour <= 20; hour++) {
     times.push(`${String(hour).padStart(2, "0")}:00`);
   }
@@ -87,16 +83,12 @@ function defaultTimesRange(dateKey) {
   return times;
 }
 
-/**
- * Actualizamos esta función para que pase la fecha a defaultTimesRange
- */
+// --- SOLO UNA VERSIÓN DE loadDaySchedule ---
 async function loadDaySchedule(dateKey) {
   const record = await loadDayScheduleRecord(dateKey);
   
   if (record?.closed) return [];
   
-  // IMPORTANTE: Si record.hours existe pero está vacío o no existe, 
-  // ejecutamos defaultTimesRange pasando el dateKey obligatoriamente.
   if (record && record.hours && record.hours.length > 0) {
     return [...record.hours].sort();
   }
@@ -203,12 +195,6 @@ async function loadDayScheduleRecord(dateKey) {
 async function isDayClosed(dateKey) {
   const record = await loadDayScheduleRecord(dateKey);
   return Boolean(record?.closed);
-}
-
-async function loadDaySchedule(dateKey) {
-  const record = await loadDayScheduleRecord(dateKey);
-  if (record?.closed) return [];
-  return record?.hours?.length ? [...record.hours].sort() : defaultTimesRange();
 }
 
 function summarizeDaySlots(slots) {
